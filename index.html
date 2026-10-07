@@ -18,6 +18,7 @@
     --code-prop: #89b4fa;
     --code-number: #fab387;
     --code-punct: #9399b2;
+    --code-anno: #f9e2af;
     --inline-code-bg: #eff1f3;
     --inline-code-fg: #c9302c;
     --table-header-bg: #f0f3f6;
@@ -28,6 +29,9 @@
     --yes: #16a34a;
     --no: #dc2626;
     --partial: #d97706;
+    --callout-bg: #fef3c7;
+    --callout-border: #d97706;
+    --callout-fg: #92400e;
   }
   @media (prefers-color-scheme: dark) {
     :root {
@@ -45,6 +49,9 @@
       --yes: #3fb950;
       --no: #f85149;
       --partial: #d29922;
+      --callout-bg: #2d1f04;
+      --callout-border: #d29922;
+      --callout-fg: #f0c674;
     }
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -55,7 +62,7 @@
     line-height: 1.7;
     padding: 2rem 1rem;
   }
-  .container { max-width: 52rem; margin: 0 auto; }
+  .container { max-width: 56rem; margin: 0 auto; }
 
   /* Header */
   header {
@@ -90,7 +97,7 @@
 
   /* Table */
   .table-wrap { overflow-x: auto; margin: 1.25rem 0; }
-  table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
   th, td { padding: 0.6rem 0.75rem; border: 1px solid var(--border); text-align: left; }
   th { background: var(--table-header-bg); font-weight: 600; white-space: nowrap; }
   tr:nth-child(even) td { background: var(--table-stripe); }
@@ -127,7 +134,7 @@
   .c-prop { color: var(--code-prop); }
   .c-number { color: var(--code-number); }
   .c-punct { color: var(--code-punct); }
-  .c-anno { color: #f9e2af; }
+  .c-anno { color: var(--code-anno); }
 
   /* Lists */
   ul, ol { margin: 0.75rem 0; padding-left: 1.75rem; }
@@ -135,6 +142,19 @@
 
   /* Shell */
   pre.shell { background: #1a1b26; }
+
+  /* Callout */
+  .callout {
+    background: var(--callout-bg);
+    border-left: 4px solid var(--callout-border);
+    color: var(--callout-fg);
+    padding: 1.25rem 1.5rem;
+    border-radius: 0 8px 8px 0;
+    margin: 1.5rem 0;
+  }
+  .callout h3 { margin-top: 0; color: inherit; }
+  .callout p { color: inherit; }
+  .callout code { color: inherit; background: rgba(0,0,0,0.1); }
 
   /* Footer */
   footer {
@@ -149,7 +169,7 @@
     body { padding: 1rem 0.75rem; }
     header h1 { font-size: 1.4rem; }
     pre { padding: 0.75rem 1rem; font-size: 0.8rem; }
-    table { font-size: 0.8rem; }
+    table { font-size: 0.75rem; }
     th, td { padding: 0.4rem 0.5rem; }
   }
 </style>
@@ -169,8 +189,8 @@
   We investigated whether react-intl, react-i18next, and LinguiJS support the following scenario:
   app strings stay in the user's chosen locale (e.g.&nbsp;French), but date/number/currency formatting
   uses a different locale (e.g.&nbsp;Japanese). 23&nbsp;of&nbsp;25 claims were verified through documentation,
-  source code analysis, and adversarial cross-checking. All claims were then validated with a
-  runnable Vitest suite (24&nbsp;tests, all passing).
+  source code analysis, and adversarial cross-checking. All claims were validated with a
+  runnable Vitest suite (31&nbsp;tests, all passing).
 </p>
 
 <h2>Feature Matrix</h2>
@@ -181,9 +201,10 @@
     <tr>
       <th>Capability</th>
       <th>react-intl</th>
-      <th>react-i18next</th>
+      <th>react-i18next (native)</th>
+      <th>react-i18next + ICU plugin</th>
       <th>LinguiJS</th>
-      <th>Intl API (escape hatch)</th>
+      <th>Intl API</th>
     </tr>
   </thead>
   <tbody>
@@ -191,27 +212,39 @@
       <td>Dates in locale B</td>
       <td class="no">&#x274C; No per-call override</td>
       <td class="yes">&#x2705; formatParams locale</td>
-      <td class="partial">&#x26A0;&#xFE0F; Global only via activate()</td>
+      <td class="no">&#x274C; formatParams ignored</td>
+      <td class="partial">&#x26A0;&#xFE0F; Global only</td>
       <td class="yes">&#x2705; Always</td>
     </tr>
     <tr>
       <td>Numbers/currency in locale C</td>
       <td class="no">&#x274C; No per-call override</td>
       <td class="yes">&#x2705; formatParams locale</td>
-      <td class="partial">&#x26A0;&#xFE0F; Same global mechanism</td>
+      <td class="no">&#x274C; formatParams ignored</td>
+      <td class="partial">&#x26A0;&#xFE0F; Same global</td>
       <td class="yes">&#x2705; Always</td>
     </tr>
     <tr>
-      <td>Different locales per value in one string</td>
+      <td>Different locales per value</td>
       <td class="no">&#x274C; Impossible</td>
-      <td class="yes">&#x2705; Yes &mdash; per-value formatParams</td>
+      <td class="yes">&#x2705; per-value formatParams</td>
+      <td class="no">&#x274C; formatParams ignored</td>
       <td class="no">&#x274C; Impossible</td>
-      <td class="yes">&#x2705; Always (manual)</td>
+      <td class="yes">&#x2705; Always</td>
+    </tr>
+    <tr>
+      <td>ICU MessageFormat</td>
+      <td class="yes">&#x2705; Native</td>
+      <td class="no">&#x274C; Requires i18next-icu plugin</td>
+      <td class="yes">&#x2705; Via plugin</td>
+      <td class="yes">&#x2705; Native</td>
+      <td class="na">N/A</td>
     </tr>
     <tr>
       <td>Plural rules per locale</td>
       <td class="no">&#x274C; Follows IntlProvider</td>
-      <td class="yes">&#x2705; lng option on t()</td>
+      <td class="yes">&#x2705; lng option</td>
+      <td class="yes">&#x2705; Via ICU</td>
       <td class="no">&#x274C; Follows activate()</td>
       <td class="yes">&#x2705; Always</td>
     </tr>
@@ -219,6 +252,7 @@
       <td>Relative time override</td>
       <td class="no">&#x274C; No per-call override</td>
       <td class="yes">&#x2705; formatParams locale</td>
+      <td class="no">&#x274C; formatParams ignored</td>
       <td class="no">&#x274C; No built-in</td>
       <td class="yes">&#x2705; Always</td>
     </tr>
@@ -226,6 +260,7 @@
       <td>List formatting override</td>
       <td class="no">&#x274C; No per-call override</td>
       <td class="yes">&#x2705; formatParams locale</td>
+      <td class="no">&#x274C; formatParams ignored</td>
       <td class="no">&#x274C; No built-in</td>
       <td class="yes">&#x2705; Always</td>
     </tr>
@@ -234,7 +269,8 @@
       <td class="na">N/A</td>
       <td class="na">N/A</td>
       <td class="na">N/A</td>
-      <td class="yes">&#x2705; Always via Intl.Collator</td>
+      <td class="na">N/A</td>
+      <td class="yes">&#x2705; Intl.Collator</td>
     </tr>
   </tbody>
 </table>
@@ -242,18 +278,63 @@
 
 <hr>
 
-<h2>react-i18next &mdash; Full Support</h2>
+<div class="callout">
+  <h3>&#x26A0;&#xFE0F; Critical Finding: ICU MessageFormat and Mixed-Locale Are Mutually Exclusive in i18next</h3>
+  <p>
+    The <code>i18next-icu</code> plugin enables full ICU MessageFormat support
+    (<code>{count, plural, ...}</code>, <code>{date, date}</code>,
+    <code>{amount, number, ::currency/EUR}</code>), but it <strong>completely replaces</strong>
+    i18next's native interpolation engine. The mixed-locale <code>formatParams.locale</code> feature
+    works through i18next's native Formatter &mdash; which the ICU plugin <strong>bypasses</strong>.
+  </p>
+  <p>
+    The existing react-i18next tenants in HCC (OpenShift Console, Assisted Installer, Portal Case Management,
+    Connect) do <strong>NOT</strong> use the ICU plugin. They use i18next's native format. If the ADR's ICU
+    MessageFormat mandate applies to them, they would need to add the <code>i18next-icu</code> plugin &mdash;
+    which would disable the mixed-locale capability.
+  </p>
+  <p><strong>You get ICU or mixed-locale formatting &mdash; not both.</strong></p>
+</div>
+
+<h3>Tested and confirmed</h3>
+
+<pre><code><span class="c-comment">// With i18next-icu active, app locale is 'fr'</span>
+
+<span class="c-comment">// ICU formatting works &#x2705;</span>
+<span class="c-prop">t</span>(<span class="c-string">'report'</span>, { <span class="c-prop">date</span>: someDate, <span class="c-prop">amount</span>: <span class="c-number">1234567.89</span> })
+<span class="c-comment">// &rarr; "Rapport du 15 juin 2025 &mdash; 1 234 567,89 &euro;"</span>
+
+<span class="c-comment">// formatParams locale is SILENTLY IGNORED &#x274C;</span>
+<span class="c-prop">t</span>(<span class="c-string">'report'</span>, {
+  <span class="c-prop">date</span>: someDate,
+  <span class="c-prop">amount</span>: <span class="c-number">1234567.89</span>,
+  <span class="c-prop">formatParams</span>: {
+    <span class="c-prop">date</span>: { <span class="c-prop">locale</span>: <span class="c-string">'ja-JP'</span> },    <span class="c-comment">// &larr; ignored</span>
+    <span class="c-prop">amount</span>: { <span class="c-prop">locale</span>: <span class="c-string">'ja-JP'</span> },  <span class="c-comment">// &larr; ignored</span>
+  },
+})
+<span class="c-comment">// &rarr; "Rapport du 15 juin 2025 &mdash; 1 234 567,89 &euro;"  (still French, not Japanese)</span></code></pre>
+
+<p>
+  The output is identical with or without <code>formatParams</code> &mdash; the locale overrides have zero effect.
+  Additionally, i18next's native <code>{{value}}</code> interpolation syntax is treated as literal text when the ICU plugin is active.
+</p>
+
+<hr>
+
+<h2>react-i18next (Native Format) &mdash; Full Mixed-Locale Support</h2>
 
 <p>
   react-i18next (v21.3.0+) supports mixed-locale formatting through <code>formatParams</code>
-  with per-value <code>locale</code> overrides. The app locale controls which translation string
+  with per-value <code>locale</code> overrides <strong>when using i18next's native interpolation</strong>
+  (not the ICU plugin). The app locale controls which translation string
   is selected; <code>formatParams.locale</code> controls how each interpolated value is formatted.
 </p>
 
 <h3>Core scenario &mdash; French string, Japanese formatting</h3>
 
-<pre><code><span class="c-comment">// App locale is 'fr'. Translation catalog:</span>
-<span class="c-comment">// "order_summary": "Résumé de la commande : {{date, datetime}} — {{amount, number}}"</span>
+<pre><code><span class="c-comment">// App locale is 'fr'. Translation catalog (native i18next format):</span>
+<span class="c-comment">// "order_summary": "R&eacute;sum&eacute; de la commande : {{date, datetime}} &mdash; {{amount, number}}"</span>
 
 <span class="c-keyword">const</span> result = <span class="c-prop">t</span>(<span class="c-string">'order_summary'</span>, {
   <span class="c-prop">date</span>: someDate,
@@ -263,17 +344,17 @@
       <span class="c-prop">year</span>: <span class="c-string">'numeric'</span>,
       <span class="c-prop">month</span>: <span class="c-string">'long'</span>,
       <span class="c-prop">day</span>: <span class="c-string">'numeric'</span>,
-      <span class="c-prop">locale</span>: <span class="c-string">'ja-JP'</span>,           <span class="c-comment">// ← date formatted in Japanese</span>
+      <span class="c-prop">locale</span>: <span class="c-string">'ja-JP'</span>,           <span class="c-comment">// &larr; date formatted in Japanese</span>
     },
     <span class="c-prop">amount</span>: {
       <span class="c-prop">style</span>: <span class="c-string">'currency'</span>,
       <span class="c-prop">currency</span>: <span class="c-string">'JPY'</span>,
-      <span class="c-prop">locale</span>: <span class="c-string">'ja-JP'</span>,           <span class="c-comment">// ← number formatted in Japanese</span>
+      <span class="c-prop">locale</span>: <span class="c-string">'ja-JP'</span>,           <span class="c-comment">// &larr; number formatted in Japanese</span>
     },
   },
 });
 
-<span class="c-comment">// Output: "Résumé de la commande : 2025年6月15日 — ￥1,234,568"</span>
+<span class="c-comment">// Output: "R&eacute;sum&eacute; de la commande : 2025&#24180;6&#26376;15&#26085; &mdash; &#65509;1,234,568"</span>
 <span class="c-anno">//          ^^^^^^^^^^^^^^^^^^^^^^^^                              French string</span>
 <span class="c-anno">//                                   ^^^^^^^^^^^^   ^^^^^^^^^^    Japanese formatting</span></code></pre>
 
@@ -288,25 +369,25 @@
   <span class="c-prop">formatParams</span>: {
     <span class="c-prop">date</span>: {
       <span class="c-prop">year</span>: <span class="c-string">'numeric'</span>, <span class="c-prop">month</span>: <span class="c-string">'long'</span>, <span class="c-prop">day</span>: <span class="c-string">'numeric'</span>,
-      <span class="c-prop">locale</span>: <span class="c-string">'ja-JP'</span>,           <span class="c-comment">// ← Japanese date</span>
+      <span class="c-prop">locale</span>: <span class="c-string">'ja-JP'</span>,           <span class="c-comment">// &larr; Japanese date</span>
     },
     <span class="c-prop">amount</span>: {
       <span class="c-prop">style</span>: <span class="c-string">'currency'</span>, <span class="c-prop">currency</span>: <span class="c-string">'USD'</span>,
-      <span class="c-prop">locale</span>: <span class="c-string">'en-US'</span>,           <span class="c-comment">// ← US dollars</span>
+      <span class="c-prop">locale</span>: <span class="c-string">'en-US'</span>,           <span class="c-comment">// &larr; US dollars</span>
     },
     <span class="c-prop">tax</span>: {
       <span class="c-prop">style</span>: <span class="c-string">'currency'</span>, <span class="c-prop">currency</span>: <span class="c-string">'EUR'</span>,
-      <span class="c-prop">locale</span>: <span class="c-string">'de-DE'</span>,           <span class="c-comment">// ← German euros</span>
+      <span class="c-prop">locale</span>: <span class="c-string">'de-DE'</span>,           <span class="c-comment">// &larr; German euros</span>
     },
   },
 });
 
-<span class="c-comment">// Output: "Facture du 2025年6月15日 pour $12,345.67 (TVA : 2.469,13 €)"</span>
+<span class="c-comment">// Output: "Facture du 2025&#24180;6&#26376;15&#26085; pour $12,345.67 (TVA : 2.469,13 &euro;)"</span>
 <span class="c-anno">//          French text   JP date         US dollars        DE euros</span></code></pre>
 
 <h3>Without formatParams locale, values use the app locale</h3>
 
-<pre><code><span class="c-comment">// Same key, no locale overrides — everything uses fr-FR</span>
+<pre><code><span class="c-comment">// Same key, no locale overrides &mdash; everything uses fr-FR</span>
 <span class="c-keyword">const</span> result = <span class="c-prop">t</span>(<span class="c-string">'order_summary'</span>, {
   <span class="c-prop">date</span>: someDate,
   <span class="c-prop">amount</span>: <span class="c-number">1234567.89</span>,
@@ -316,8 +397,8 @@
   },
 });
 
-<span class="c-comment">// Output: "Résumé de la commande : 15 juin 2025 — 1 234 567,89 €"</span>
-<span class="c-anno">//          All French — default behavior preserved</span></code></pre>
+<span class="c-comment">// Output: "R&eacute;sum&eacute; de la commande : 15 juin 2025 &mdash; 1 234 567,89 &euro;"</span>
+<span class="c-anno">//          All French &mdash; default behavior preserved</span></code></pre>
 
 <h3>React component usage</h3>
 
@@ -339,7 +420,7 @@
 
 <hr>
 
-<h2>react-intl (FormatJS) &mdash; No Support</h2>
+<h2>react-intl (FormatJS) &mdash; No Mixed-Locale Support</h2>
 
 <p>
   Locale is set once at <code>IntlProvider</code>/<code>createIntl</code> level. None of the
@@ -382,7 +463,9 @@
 <h2>Caveats</h2>
 
 <ul>
-  <li>react-i18next's <code>formatParams</code> locale override requires i18next v21.3.0+ (Formatter class)</li>
+  <li>react-i18next's <code>formatParams</code> locale override requires i18next v21.3.0+ (Formatter class) <strong>and</strong> must NOT use the <code>i18next-icu</code> plugin</li>
+  <li>The <code>i18next-icu</code> plugin completely replaces i18next's native interpolation &mdash; <code>{{value}}</code> syntax becomes literal text, <code>formatParams</code> locale overrides are silently ignored</li>
+  <li>Existing HCC react-i18next tenants (OpenShift Console, Assisted Installer) use native i18next format, not ICU &mdash; the ADR's ICU mandate would require them to add the plugin, which disables mixed-locale</li>
   <li>LinguiJS <code>i18n.date()</code>/<code>i18n.number()</code> are deprecated and will be removed</li>
   <li>Collation/sorting is not a feature of any library &mdash; all rely on <code>Intl.Collator</code></li>
   <li>SSR-specific mixed-locale behavior (Next.js, Remix) was not tested</li>
@@ -390,9 +473,16 @@
 
 <h2>Test Suite</h2>
 
-<p>
-  A runnable Vitest suite validating every claim is in this repo (24&nbsp;tests, 4&nbsp;files, all passing). Run with:
-</p>
+<p>31 tests across 5 files, all passing:</p>
+
+<pre class="shell"><code>tests/
+&#x251C;&#x2500;&#x2500; react-intl.test.tsx          5 tests &mdash; confirms no per-call locale override
+&#x251C;&#x2500;&#x2500; react-i18next.test.tsx       5 tests &mdash; confirms formatParams locale works (native format)
+&#x251C;&#x2500;&#x2500; react-i18next-icu.test.tsx   7 tests &mdash; confirms ICU works but formatParams ignored
+&#x251C;&#x2500;&#x2500; lingui.test.tsx              5 tests &mdash; confirms global-only locale split
+&#x2514;&#x2500;&#x2500; intl-api.test.ts             9 tests &mdash; confirms Intl API always supports per-call locale</code></pre>
+
+<p>Run with:</p>
 
 <pre class="shell"><code>npm install &amp;&amp; npm test</code></pre>
 
@@ -403,6 +493,7 @@
   <li><a href="https://github.com/formatjs/formatjs/issues/1674">FormatJS #1674 &mdash; per-call locale request (never implemented)</a></li>
   <li><a href="https://www.i18next.com/overview/api">i18next API docs &mdash; t() options</a></li>
   <li><a href="https://www.i18next.com/translation-function/formatting">i18next Formatting &mdash; formatParams</a></li>
+  <li><a href="https://github.com/i18next/i18next-icu">i18next-icu plugin</a></li>
   <li><a href="https://react.i18next.com/latest/usetranslation-hook">react-i18next useTranslation &mdash; lng option</a></li>
   <li><a href="https://lingui.dev/ref/core">LinguiJS Core Reference</a></li>
 </ul>
