@@ -1,29 +1,63 @@
 ## Research Results: Mixed-Locale Rendering Support
 
-We investigated whether react-intl, react-i18next, and LinguiJS support the following scenario: app strings stay in the user's chosen locale (e.g. French), but date/number/currency formatting uses a different locale (e.g. Japanese). 23 of 25 claims were verified through documentation, source code analysis, and adversarial cross-checking. All claims were then validated with a runnable Vitest suite (24 tests, all passing).
+We investigated whether react-intl, react-i18next, and LinguiJS support the following scenario: app strings stay in the user's chosen locale (e.g. French), but date/number/currency formatting uses a different locale (e.g. Japanese). 23 of 25 claims were verified through documentation, source code analysis, and adversarial cross-checking. All claims were validated with a runnable Vitest suite (31 tests, all passing).
 
 ### Feature Matrix
 
-| Capability | react-intl | react-i18next | LinguiJS | Intl API (escape hatch) |
-|---|---|---|---|---|
-| Dates in locale B | :x: No per-call override | :white_check_mark: formatParams locale | :warning: Global only via activate() | :white_check_mark: Always |
-| Numbers/currency in locale C | :x: No per-call override | :white_check_mark: formatParams locale | :warning: Same global mechanism | :white_check_mark: Always |
-| Different locales per value in one string | :x: Impossible | :white_check_mark: Yes — per-value formatParams | :x: Impossible | :white_check_mark: Always (manual) |
-| Plural rules per locale | :x: Follows IntlProvider | :white_check_mark: lng option on t() | :x: Follows activate() | :white_check_mark: Always |
-| Relative time override | :x: No per-call override | :white_check_mark: formatParams locale | :x: No built-in | :white_check_mark: Always |
-| List formatting override | :x: No per-call override | :white_check_mark: formatParams locale | :x: No built-in | :white_check_mark: Always |
-| Collation/sorting | N/A | N/A | N/A | :white_check_mark: Always via Intl.Collator |
+| Capability | react-intl | react-i18next (native) | react-i18next + ICU plugin | LinguiJS | Intl API |
+|---|---|---|---|---|---|
+| Dates in locale B | :x: No per-call override | :white_check_mark: formatParams locale | :x: formatParams ignored | :warning: Global only | :white_check_mark: Always |
+| Numbers/currency in locale C | :x: No per-call override | :white_check_mark: formatParams locale | :x: formatParams ignored | :warning: Same global | :white_check_mark: Always |
+| Different locales per value | :x: Impossible | :white_check_mark: per-value formatParams | :x: formatParams ignored | :x: Impossible | :white_check_mark: Always |
+| ICU MessageFormat | :white_check_mark: Native | :x: Requires i18next-icu plugin | :white_check_mark: Via plugin | :white_check_mark: Native | N/A |
+| Plural rules per locale | :x: Follows IntlProvider | :white_check_mark: lng option | :white_check_mark: Via ICU | :x: Follows activate() | :white_check_mark: Always |
+| Relative time override | :x: No per-call override | :white_check_mark: formatParams locale | :x: formatParams ignored | :x: No built-in | :white_check_mark: Always |
+| List formatting override | :x: No per-call override | :white_check_mark: formatParams locale | :x: formatParams ignored | :x: No built-in | :white_check_mark: Always |
+| Collation/sorting | N/A | N/A | N/A | N/A | :white_check_mark: Intl.Collator |
 
 ---
 
-### react-i18next — Full Support
+### :warning: Critical Finding: ICU MessageFormat and Mixed-Locale Are Mutually Exclusive in i18next
 
-react-i18next (v21.3.0+) supports mixed-locale formatting through `formatParams` with per-value `locale` overrides. The app locale controls which translation string is selected; `formatParams.locale` controls how each interpolated value is formatted.
+The `i18next-icu` plugin enables full ICU MessageFormat support (`{count, plural, ...}`, `{date, date}`, `{amount, number, ::currency/EUR}`), but it **completely replaces** i18next's native interpolation engine. The mixed-locale `formatParams.locale` feature works through i18next's native Formatter — which the ICU plugin **bypasses**.
+
+**Tested and confirmed:**
+
+```javascript
+// With i18next-icu active, app locale is 'fr'
+
+// ICU formatting works ✅
+t('report', { date: someDate, amount: 1234567.89 })
+// → "Rapport du 15 juin 2025 — 1 234 567,89 €"
+
+// formatParams locale is SILENTLY IGNORED ❌
+t('report', {
+  date: someDate,
+  amount: 1234567.89,
+  formatParams: {
+    date: { locale: 'ja-JP' },    // ← ignored
+    amount: { locale: 'ja-JP' },  // ← ignored
+  },
+})
+// → "Rapport du 15 juin 2025 — 1 234 567,89 €"  (still French, not Japanese)
+```
+
+The output is identical with or without `formatParams` — the locale overrides have zero effect. Additionally, i18next's native `{{value}}` interpolation syntax is treated as literal text when the ICU plugin is active.
+
+**The existing react-i18next tenants in HCC (OpenShift Console, Assisted Installer, Portal Case Management, Connect) do NOT use the ICU plugin.** They use i18next's native format. If the ADR's ICU MessageFormat mandate applies to them, they would need to add the `i18next-icu` plugin — which would disable the mixed-locale capability.
+
+**You get ICU or mixed-locale formatting — not both.**
+
+---
+
+### react-i18next (Native Format) — Full Mixed-Locale Support
+
+react-i18next (v21.3.0+) supports mixed-locale formatting through `formatParams` with per-value `locale` overrides **when using i18next's native interpolation** (not the ICU plugin). The app locale controls which translation string is selected; `formatParams.locale` controls how each interpolated value is formatted.
 
 **Core scenario — French string, Japanese formatting:**
 
 ```javascript
-// App locale is 'fr'. Translation catalog:
+// App locale is 'fr'. Translation catalog (native i18next format):
 // "order_summary": "Résumé de la commande : {{date, datetime}} — {{amount, number}}"
 
 const result = t('order_summary', {
@@ -117,7 +151,7 @@ function OrderSummary({ date, amount }) {
 
 ---
 
-### react-intl (FormatJS) — No Support
+### react-intl (FormatJS) — No Mixed-Locale Support
 
 Locale is set once at `IntlProvider`/`createIntl` level. None of the formatting functions (`formatDate`, `formatNumber`, `formatRelativeTime`, `formatList`) or `Formatted*` components accept a locale parameter. The TypeScript types confirm this — `FormatDateOptions` has no locale field. GitHub issue [#1674](https://github.com/formatjs/formatjs/issues/1674) requested this feature but it was never implemented.
 
@@ -139,17 +173,30 @@ Every `Intl` constructor (`DateTimeFormat`, `NumberFormat`, `RelativeTimeFormat`
 
 ### Caveats
 
-- react-i18next's `formatParams` locale override requires i18next v21.3.0+ (Formatter class)
+- react-i18next's `formatParams` locale override requires i18next v21.3.0+ (Formatter class) **and** must NOT use the `i18next-icu` plugin
+- The `i18next-icu` plugin completely replaces i18next's native interpolation — `{{value}}` syntax becomes literal text, `formatParams` locale overrides are silently ignored
+- Existing HCC react-i18next tenants (OpenShift Console, Assisted Installer) use native i18next format, not ICU — the ADR's ICU mandate would require them to add the plugin, which disables mixed-locale
 - LinguiJS `i18n.date()`/`i18n.number()` are deprecated and will be removed
 - Collation/sorting is not a feature of any library — all rely on `Intl.Collator`
 - SSR-specific mixed-locale behavior (Next.js, Remix) was not tested
 
 ### Test Suite
 
-A runnable Vitest suite validating every claim is at `research/mixed-locale-i18n/` in the repo (24 tests, 4 files, all passing). Run with:
+31 tests across 5 files, all passing:
+
+```
+tests/
+├── react-intl.test.tsx          5 tests — confirms no per-call locale override
+├── react-i18next.test.tsx       5 tests — confirms formatParams locale works (native format)
+├── react-i18next-icu.test.tsx   7 tests — confirms ICU works but formatParams ignored
+├── lingui.test.tsx              5 tests — confirms global-only locale split
+└── intl-api.test.ts             9 tests — confirms Intl API always supports per-call locale
+```
+
+Run with:
 
 ```sh
-cd research/mixed-locale-i18n && npm install && npm test
+npm install && npm test
 ```
 
 ### Sources
@@ -158,5 +205,6 @@ cd research/mixed-locale-i18n && npm install && npm test
 - [FormatJS #1674 — per-call locale request (never implemented)](https://github.com/formatjs/formatjs/issues/1674)
 - [i18next API docs — t() options](https://www.i18next.com/overview/api)
 - [i18next Formatting — formatParams](https://www.i18next.com/translation-function/formatting)
+- [i18next-icu plugin](https://github.com/i18next/i18next-icu)
 - [react-i18next useTranslation — lng option](https://react.i18next.com/latest/usetranslation-hook)
 - [LinguiJS Core Reference](https://lingui.dev/ref/core)
