@@ -1,0 +1,26 @@
+{
+  "name": "mixed-locale-i18n-research",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Validates mixed-locale rendering capabilities across react-intl, react-i18next, and LinguiJS",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-intl": "^7.1.6",
+    "react-i18next": "^15.4.1",
+    "i18next": "^24.2.2",
+    "@lingui/core": "^5.2.1",
+    "@lingui/react": "^5.2.1"
+  },
+  "devDependencies": {
+    "@testing-library/react": "^16.3.0",
+    "@types/react": "^18.3.18",
+    "vitest": "^3.1.4",
+    "jsdom": "^26.1.0",
+    "typescript": "^5.7.3"
+  }
+}
